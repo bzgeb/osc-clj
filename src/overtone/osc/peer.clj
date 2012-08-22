@@ -3,7 +3,7 @@
            [java.util.concurrent TimeUnit TimeoutException PriorityBlockingQueue]
            [java.nio.channels DatagramChannel AsynchronousCloseException ClosedChannelException]
            [java.nio ByteBuffer]
-           [javax.jmdns JmDNS ServiceListener ServiceInfo])
+           )
   (:use [clojure.set :as set]
         [overtone.osc.util]
         [overtone.osc.decode :only [osc-decode-packet]]
@@ -12,63 +12,7 @@
   (:require [overtone.at-at :as at-at]
             [clojure.string :as string]))
 
-(def zero-conf* (agent nil))
-(def zero-conf-services* (atom {}))
 (defonce dispatch-pool (at-at/mk-pool))
-
-(defn turn-zero-conf-on
-  "Turn zeroconf on and register all services in zero-conf-services* if any."
-  []
-  (send zero-conf* (fn [zero-conf]
-                     (if zero-conf
-                       zero-conf
-                       (let [zero-conf (JmDNS/create)]
-                         (doseq [service (vals @zero-conf-services*)]
-                           (.registerService zero-conf service))
-                         zero-conf))))
-  :zero-conf-on)
-
-(defn turn-zero-conf-off
-  "Unregister all zeroconf services and close zeroconf down."
-  []
-  (send zero-conf* (fn [zero-conf]
-                     (when zero-conf
-                       (.unregisterAllServices zero-conf)
-                       (.close zero-conf))
-                     nil))
-  :zero-conf-off)
-
-(defn unregister-zero-conf-service
-  "Unregister zeroconf service registered with port."
-  [port]
-  (send zero-conf* (fn [zero-conf port]
-                     (swap! zero-conf-services* dissoc port)
-                     (let [service (get @zero-conf-services* port)]
-                       (when (and zero-conf zero-conf)
-                         (.unregisterService zero-conf service)))
-                     zero-conf)
-        port))
-
-(defn register-zero-conf-service
-  "Register zeroconf service with name service-name and port."
-  [service-name port]
-  (send zero-conf* (fn [zero-conf service-name port]
-                     (let [service-name (str service-name " : " port)
-                           service (ServiceInfo/create "_osc._udp.local"
-                                                       service-name port
-                                                       (str "Clojure OSC Server"))]
-                       (swap! zero-conf-services* assoc port service)
-                       (when zero-conf
-                         (.registerService zero-conf service))
-                       zero-conf))
-        service-name
-        port))
-
-(defn zero-conf-running?
-  []
-  (if @zero-conf*
-    true
-    false))
 
 (defn- recv-next-packet
   "Fills buf with the contents of the next packet and then decodes it into an
@@ -347,35 +291,12 @@
   (when-not (string? host)
     (throw (Exception. (str "host should be a string - got:" host))))
   (let [host (string/trim host)]
-    (when (:zero-conf-name peer)
-      (unregister-zero-conf-service (:port peer)))
 
     (dosync
      (ref-set (:host peer) host)
      (ref-set (:port peer) port)
      (ref-set (:addr peer) (InetSocketAddress. host port)))
-
-    (when (:zero-conf-name peer)
-      (register-zero-conf-service (:zero-conf-name peer) port))))
-
-(defn server-peer
-  "Returns a live OSC server ready to register handler functions."
-  [port zero-conf-name]
-  (when-not (integer? port)
-    (throw (Exception. (str "port should be an integer - got: " port))))
-  (when-not (string? zero-conf-name)
-    (throw (Exception. (str "zero-conf-name should be a string - got:" zero-conf-name))))
-  (let [peer (peer :with-listener)
-        chan (:chan peer)]
-    (bind-chan! chan port)
-    (register-zero-conf-service zero-conf-name port)
-    (with-meta
-      (assoc peer
-        :host (ref nil)
-        :port (ref port)
-        :addr (ref nil)
-        :zero-conf-name zero-conf-name)
-      {:type ::server})))
+    ))
 
 (defmethod print-method ::server [peer w]
   (.write w (format "#<osc-server: n-listeners[%s] n-handlers[%s] port[%s] open?[%s]>"  (num-listeners peer) (num-handlers peer) @(:port peer) @(:running? peer))))
@@ -383,8 +304,6 @@
 (defn close-peer
   "Close a peer, also works for clients and servers."
   [peer & wait]
-  (when (:zero-conf-name peer)
-    (unregister-zero-conf-service (:port peer)))
   (dosync (ref-set (:running? peer) false))
   (.close (:chan peer))
   (when wait

@@ -53,14 +53,8 @@ http://opensoundcontrol.org/spec-1_0
 
     (def PORT 4242)
 
-    ; start a server and create a client to talk with it
-    (def server (osc-server PORT))
+    ; create a client
     (def client (osc-client "localhost" PORT))
-
-    ; Register a handler function for the /test OSC address
-    ; The handler takes a message map with the following keys:
-    ;   [:src-host, :src-port, :path, :type-tag, :args]
-    (osc-handle server "/test" (fn [msg] (println "MSG: " msg)))
 
     ; send it some messages
     (doseq [val (range 10)]
@@ -68,12 +62,8 @@ http://opensoundcontrol.org/spec-1_0
 
     (Thread/sleep 1000)
 
-    ;remove handler
-    (osc-rm-handler server "/test")
-
     ; stop listening and deallocate resources
     (osc-close client)
-    (osc-close server)
 
 ## Documentation
 
@@ -112,28 +102,6 @@ Then you may send a message using `osc-send`:
     (osc-send client "/foo/bar/baz 1 2 "three")
 
 
-### OSC Server
-
-The `osc-clj` server allows you to receive OSC messages by listening on a specific port. You may then register method handlers and/or listeners with the server which may be triggered by incoming messages.
-
-Create new server with `osc-server`:
-
-    (def server (osc-server 9800))
-
-#### OSC Listeners
-
-`osc-clj` servers support both listeners and handlers. Listeners are fns you register which will be triggered for each and every incoming message. The fn must accept one argument - the message to receive. Each listener may also be associated with a unique key which allows you to individually remove it at a later time.
-
-Here we use `osc-listen` to add a generic listener that will print *all* incoming OSC messages to std-out. We also specify the key `:debug`:
-
-    (osc-listen server (fn [msg] (println "Listener: " msg)) :debug)
-
-To remove the listener simply call:
-
-    (osc-rm-listener server :debug)
-
-`osc-clj` also supplies the fn `osc-rm-all-listeners` which will remove all listeners on the specified server.
-
 #### OSC Method Handlers
 
 Handlers are registered with an OSC path such as /foo/bar - they are only triggered if the path of the incoming OSC message matches the registered path. Only one handler may be registered with any given path.
@@ -145,8 +113,6 @@ To register a handler for the path "/foo/bar" do the following:
 This will only print out received messages that match the path "/foo/bar". To remove call:
 
     (osc-rm-handler s "/foo/bar")
-
-`osc-clj` also supplies the fn `osc-rm-all-handlers` which will remove all the servers handlers within the path and below in the hierarchy (i.e. `(osc-rm-all-handlers server "/foo")` will remove all handlers registered at /foo and any below i.e. /foo/bar /foo/bar/baz etc. Passing no path to `osc-rm-all-handlers` will remove *all* handlers on the server.
 
 ### OSC Bundles
 
@@ -196,22 +162,6 @@ The matchers may also be combined:
 There is no guarantee on the order of fn triggering.
 
 For example, `/foo/{bar,baz}/quux` will trigger fns in both `/foo/bar/quux/` and `/foo/baz/quux` but with no specific order.
-
-### Zeroconf
-
-`osc-clj` has support for broadcasting the presence of your OSC servers to the local network using zerconf. This is disabled by default.
-
-On creation of a server, you may specify an option tag:
-
-    (def server (osc-server 9800 "My OSC Server"))
-
-The string `My OSC Server` is then used to register your server with zeroconf. In order to use zeroconf you must turn it on:
-
-    (zero-conf-on)
-
-You should now see your server with clients that speak zeroconf. It is known that zero-conf can eat up a lot of cpu time - especially on chatty networks. It is therefore recommended to switch it off once you have configured and connected your client:
-
-    (zero-conf-off)
 
 ## Project Info:
 

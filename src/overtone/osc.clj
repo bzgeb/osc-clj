@@ -18,93 +18,6 @@
   [peer msg msg-to-reply-to]
   (peer-reply-msg peer msg msg-to-reply-to))
 
-(defn osc-listen
-  "Attach a generic listener function that will be called with every incoming
-  osc message. An optional key allows you to specifically refer to this listener
-  at a later point in time. If no key is passed, the listener itself will also
-  serve as the key.
-
-  (osc-listen s (fn [msg] (println \"listener: \" msg)) :foo)."
-  ([peer listener] (osc-listen peer listener listener))
-  ([peer listener key]
-     (dosync
-      (alter (:listeners peer) assoc key listener))
-     peer))
-
-(defn osc-listeners
-  "Return a seq of the keys of all registered listeners. This may be the
-  listener fns themselves if no key was explicitly specified when the listener
-  was registered."
-  [peer]
-  (keys @(:listeners peer)))
-
-(defn osc-rm-listener
-  "Remove the generic listener associated with the specific key
-  (osc-rm-listener s :foo)"
-  [peer key]
-  (dosync
-   (alter (:listeners peer) dissoc key))
-  peer)
-
-(defn osc-rm-all-listeners
-  "Remove all generic listeners associated with server"
-  [peer]
-  (dosync
-   (ref-set (:listeners peer) {}))
-  peer)
-
-(defn osc-handle
-  "Add a handle fn (a method in OSC parlance) to the specified OSC path
-  (container). This handle will be called when an incoming OSC message matches
-  the supplied path. This may either be a direct match, or a pattern match if
-  the incoming OSC message uses wild card chars in its path.  The path you
-  specify may not contain any of the OSC reserved chars:
-  # * , ? [ ] { } and whitespace
-
-  Will override and remove any handler already associated with the supplied
-  path. If the handler-fn returns :done it will automatically remove itself."
-  [peer path handler]
-  (peer-handle server path  handler)
-  peer)
-
-(defn osc-handlers
-  "Returns a seq of all the paths containing a handler for the server. If a
-  path is specified, the result will be scoped within that subtree."
-  ([peer] (osc-handlers peer "/"))
-  ([peer path]
-     (peer-handler-paths peer path)))
-
-(defn osc-rm-handler
-  "Remove the handler at the specified path.
-  specific handler (if found)"
-  [peer path]
-  (peer-rm-handler peer path)
-  peer)
-
-(defn osc-rm-all-handlers
-  "Remove all registered handlers for the supplied path (defaulting to /)
-  This not only removes the handler associated with the specified path
-  but also all handlers further down in the path tree. i.e. if handlers
-  have been registered for both /foo/bar and /foo/bar/baz and
-  osc-rm-all-handlers is called with /foo/bar, then the handlers associated
-  with both /foo/bar and /foo/bar/baz will be removed."
-  ([peer] (osc-rm-all-handlers peer "/"))
-  ([peer path]
-     (peer-rm-all-handlers peer path)
-     peer))
-
-(defn osc-recv
-  "Register a one-shot handler which will remove itself once called. If a
-  timeout is specified, it will return nil if a message matching the path
-  is not received within timeout milliseconds. Otherwise, it will block
-  the current thread until a message has been received.
-
-  Will override and remove any handler already associated with the supplied
-  path."
-  [peer path handler & [timeout]]
-  (peer-recv peer path handler timeout)
-  peer)
-
 (defn osc-reply
   "Similar to osc-send except ignores the peer's target address and instead
   sends the OSC message to the sender of msg-to-reply-to. It is not currently
@@ -161,14 +74,6 @@
   (update-peer-target client host port)
   client)
 
-(defn osc-server
-  "Returns a live OSC server ready to register handler functions. By default
-  this also registers the server with zeroconf. The name used to register
-  can be passed as an optional param. If the zero-conf-name is set to nil
-  zeroconf wont' be used."
-  ([port] (osc-server port "osc-clj"))
-  ([port zero-conf-name] (server-peer port zero-conf-name)))
-
 (defn osc-close
   "Close an osc-peer, works for both clients and servers. If peer has been
   registered with zeroconf, it will automatically remove it."
@@ -180,24 +85,6 @@
   [& [on-off]]
   (let [on-off (if (= on-off false) false true)]
     (dosync (ref-set osc-debug* on-off))))
-
-(defn zero-conf-on
-  "Turn zeroconf on. Will automatically register all running servers with their
-  specified service names (defaulting to \"osc-clj\" if none was specified).
-  Asynchronous."
-  []
-  (turn-zero-conf-on))
-
-(defn zero-conf-off
-  "Turn zeroconf off. Will unregister all registered services and close zeroconf
-  down. Asynchronous."
-  []
-  (turn-zero-conf-off))
-
-(defn zero-conf?
-  "Returns true if zeroconf is running, false otherwise."
-  []
-  (zero-conf-running?))
 
 (defn osc-now
   "Return the current time in milliseconds"

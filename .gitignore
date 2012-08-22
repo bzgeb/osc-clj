@@ -5,3 +5,4 @@ classes/*
 *.jar
 .cake
 pom.xml
+target/*
